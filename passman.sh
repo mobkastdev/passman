@@ -7,77 +7,107 @@ id=$(sed '1!G;h;$!d' ~/passwords.txt | grep -m 1 "id: " | awk '{print $2}')
 
 select viewoption in "list" "add" "exit"
 do
-	case $viewoption in
+    case $viewoption in
 	
-		list)
-			echo "Enter the sitename:"
-			read sname		
+        list)
+	echo "Enter the sitename:"
+	read sname		
 
-			while read -r results; do
-				array+=("$results") 
-			# make variable and check regex here
-			done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' ~/passwords.txt)
+	while read -r results; do
+	    array+=("$results") 
+	# make variable and check regex here
+	done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' ~/passwords.txt)
 
-			echo "Select sitename to copy username:"
-			for ((i=0; i<${#array[@]}; i++)); do
-				echo "$(($i+1))) ${array[i]}"
-			done
-			read siteselect
+	echo "Select sitename to copy username:"
+	for ((i=0; i<${#array[@]}; i++)); do
+	    echo "$(($i+1))) ${array[i]}"
+	done
+	read siteselect
 	
-			select interactoption in "copy info" "list metadata" "edit" "delete" "exit"
-			do 
-				case $interactoption in
+        objectInfo=$(grep -A3 "^id: $(($siteselect-1))" ~/passwords.txt)
+        objectInfoLineNumber=$(awk -v select="id: $(($siteselect-1))" '$0~select{print NR}' ~/passwords.txt)
+        previousSite=$(echo "$objectInfo" | awk '/^site: / {$1=""; print substr($0,2)}')
+        previousUser=$(echo "$objectInfo" | awk '/^user: / {$1=""; print substr($0,2)}')
+        previousPass=$(echo "$objectInfo" | awk '/^pass: / {$1=""; print substr($0,2)}')
+        echo $objectInfoLineNumber
 
-					"copy info")
-					# Selects the site to copy and copies the username to clipboard 
-					# (pbcopy only works on mac)
-					grep -A2 "id: $(($siteselect-1))" ~/passwords.txt | awk '/^user: / {$1=""; print substr($0,2)}'| pbcopy
+        select interactoption in "copy info" "list metadata" "edit" "delete" "exit"
+	do 
+	    case $interactoption in
 
-					echo "Username copied!"
-					echo "Press enter when you would like to copy the password..."
-					read
+	    "copy info")
+	    # Selects the site to copy and copies the username to clipboard 
+	    # (pbcopy only works on mac)
+            echo "$previousUser" | pbcopy
 
-					# Copies the password to clipboard	
-					grep -A3 "id: $(($siteselect-1))" ~/passwords.txt | awk '/^pass: / {$1=""; print substr($0,2)}'| pbcopy
-					echo "Password copied!"
-					;;
+	    echo "Username copied!"
+	    echo "Press enter when you would like to copy the password..."
+	    read
 
-					"list metadata")
-					;;
+	    # Copies the password to clipboard	
+            echo "$previousPass" | pbcopy
+	    echo "Password copied!"
+	    ;;
 
-					edit)
-					;;
+	    "list metadata")
+	    ;;
 
-					delete)
-					;;
+	    edit)
+                echo "Site Name ($previousSite):"
+	        read sname
+                echo "Username ($previousUser):"
+	        read uname
+                echo "Password: ($previousPass)"	
+	        read -s pass
+
+                if [[ -n $sname ]]; then
+                    sed -i '' "$(($objectInfoLineNumber+1))s/$previousSite/$sname/g" ~/passwords.txt
+                fi
+                
+                if [[ -n $uname ]]; then
+                    sed -i '' "$(($objectInfoLineNumber+2))s/$previousUser/$uname/g" ~/passwords.txt
+                fi
+
+                if [[ -n $pass ]]; then
+                    sed -i '' "$(($objectInfoLineNumber+3))s/$previousPass/$pass/g" ~/passwords.txt
+                fi
+
+                echo 
+                echo "Account successfully updated!"
+	    ;;
+
+	    delete)
+	    ;;
 					
-					exit)
-					break
-					;;
-				esac
-			done
+	    exit)
+	    break
+	    ;;
+	    esac
+        done
 
-			array=()
-			;;
+	array=()
+	;;
 
-		add)
-			echo $id
-			echo "Site Name:"
-			read sname
-			echo "Username:"
-			read uname
-			echo "Password:"	
-			read -s pass
-			echo "id: $(($id + 1))" >> ~/passwords.txt 
-			echo "site: $sname" >> ~/passwords.txt
-			echo "user: $uname" >> ~/passwords.txt
-			echo "pass: $pass" >> ~/passwords.txt
-			echo " " >> ~/passwords.txt
-			;;
+	add)
+	echo "Site Name:"
+	read sname
+	echo "Username:"
+	read uname
+	echo "Password:"	
+	read -s pass
+	echo "id: $(($id + 1))" >> ~/passwords.txt 
+	echo "site: $sname" >> ~/passwords.txt
+	echo "user: $uname" >> ~/passwords.txt
+	echo "pass: $pass" >> ~/passwords.txt
+	echo " " >> ~/passwords.txt
+	;;
 
-		exit) exit 0;; 
+	exit) 
+        exit 0
+        ;; 
 		
-		*) echo "Other";;
+	*) echo "Other"
+        ;;
 	esac
 done
 
