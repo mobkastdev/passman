@@ -29,7 +29,6 @@ do
         previousSite=$(echo "$objectInfo" | awk '/^site: / {$1=""; print substr($0,2)}')
         previousUser=$(echo "$objectInfo" | awk '/^user: / {$1=""; print substr($0,2)}')
         previousPass=$(echo "$objectInfo" | awk '/^pass: / {$1=""; print substr($0,2)}')
-        echo $objectInfoLineNumber
 
         select interactoption in "copy info" "list metadata" "edit" "delete" "exit"
 	do 
@@ -77,6 +76,7 @@ do
 	    ;;
 
 	    delete)
+                sed -i '' $(($objectInfoLineNumber)),$(($objectInfoLineNumber+5))d ~/passwords.txt
 	    ;;
 					
 	    exit)
