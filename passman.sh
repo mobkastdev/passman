@@ -1,9 +1,19 @@
 #!/bin/bash
+
+echo "Password:"
+read -s masterpass
+
+# Decrypt file
+inputStream=$(openssl enc -d -aes-256-cbc -in ~/passwords.enc -pass pass:$masterpass 2> /dev/null)
+
+if [ $? -ne 0 ]; then
+    echo "Incorrect password!"
+    exit 1
+fi
+
 declare -a array
 # Reverse grep search for the first occurance of "id"
-id=$(sed '1!G;h;$!d' ~/passwords.txt | grep -m 1 "id: " | awk '{print $2}')
-#if [su $(whoami)] then
-
+id=$(sed '1!G;h;$!d' <<< "$inputStream" | grep -m 1 "id: " | awk '{print $2}')
 
 select viewoption in "list" "add" "exit"
 do
@@ -16,7 +26,7 @@ do
 	while read -r results; do
 	    array+=("$results") 
 	# make variable and check regex here
-	done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' ~/passwords.txt)
+	done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' <<< "$inputStream")
 
 	echo "Select sitename to copy username:"
 	for ((i=0; i<${#array[@]}; i++)); do
@@ -24,11 +34,12 @@ do
 	done
 	read siteselect
 	
-        objectInfo=$(grep -A3 "^id: $(($siteselect-1))" ~/passwords.txt)
-        objectInfoLineNumber=$(awk -v select="id: $(($siteselect-1))" '$0~select{print NR}' ~/passwords.txt)
-        previousSite=$(echo "$objectInfo" | awk '/^site: / {$1=""; print substr($0,2)}')
-        previousUser=$(echo "$objectInfo" | awk '/^user: / {$1=""; print substr($0,2)}')
-        previousPass=$(echo "$objectInfo" | awk '/^pass: / {$1=""; print substr($0,2)}')
+        # BUG: Only works with display all, if individual search is done, it does not work
+        objectInfo=$(grep -A3 "^id: $(($siteselect-1))" <<< "$inputStream")
+        objectInfoLineNumber=$(awk -v select="id: $(($siteselect-1))" '$0~select{print NR}' <<< "$inputStream")
+        previousSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
+        previousUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
+        previousPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
 
         select interactoption in "copy info" "list metadata" "edit" "delete" "exit"
 	do 
@@ -37,18 +48,21 @@ do
 	    "copy info")
 	    # Selects the site to copy and copies the username to clipboard 
 	    # (pbcopy only works on mac)
-            echo "$previousUser" | pbcopy
+            pbcopy <<< "$previousUser"
 
 	    echo "Username copied!"
 	    echo "Press enter when you would like to copy the password..."
 	    read
 
 	    # Copies the password to clipboard	
-            echo "$previousPass" | pbcopy
+            pbcopy <<< "$previousPass"
 	    echo "Password copied!"
 	    ;;
 
 	    "list metadata")
+                echo "site: $previousSite"
+                echo "user: $previousUser"
+                echo "pass: $previousPass"
 	    ;;
 
 	    edit)
@@ -60,23 +74,32 @@ do
 	        read -s pass
 
                 if [[ -n $sname ]]; then
-                    sed -i '' "$(($objectInfoLineNumber+1))s/$previousSite/$sname/g" ~/passwords.txt
+                    inputStream=$(sed "$(($objectInfoLineNumber+1))s/$previousSite/$sname/g" <<< "$inputStream")
                 fi
                 
                 if [[ -n $uname ]]; then
-                    sed -i '' "$(($objectInfoLineNumber+2))s/$previousUser/$uname/g" ~/passwords.txt
+                    inputStream=$(sed "$(($objectInfoLineNumber+2))s/$previousUser/$uname/g" <<< "$inputStream")
                 fi
 
                 if [[ -n $pass ]]; then
-                    sed -i '' "$(($objectInfoLineNumber+3))s/$previousPass/$pass/g" ~/passwords.txt
+                    inputStream=$(sed "$(($objectInfoLineNumber+3))s/$previousPass/$pass/g" <<< "$inputStream")
                 fi
 
+                # Add this to a function
+        objectInfo=$(grep -A3 "^id: $(($siteselect-1))" <<< "$inputStream")
+        previousSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
+        previousUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
+        previousPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
                 echo 
                 echo "Account successfully updated!"
 	    ;;
 
 	    delete)
-                sed -i '' $(($objectInfoLineNumber)),$(($objectInfoLineNumber+5))d ~/passwords.txt
+                inputStream=$(sed "$(($objectInfoLineNumber)),$(($objectInfoLineNumber+5))" <<< "$inputStream")
+
+                #Add function here
+                echo 
+                echo "Account successfully deleted!"
 	    ;;
 					
 	    exit)
@@ -95,20 +118,17 @@ do
 	read uname
 	echo "Password:"	
 	read -s pass
-	echo "id: $(($id + 1))" >> ~/passwords.txt 
-	echo "site: $sname" >> ~/passwords.txt
-	echo "user: $uname" >> ~/passwords.txt
-	echo "pass: $pass" >> ~/passwords.txt
-	echo " " >> ~/passwords.txt
+	echo "id: $(($id + 1))" >> $inputStream 
+	echo "site: $sname" >> $inputStream
+	echo "user: $uname" >> $inputStream
+	echo "pass: $pass" >> $inputStream
+	echo " " >> $inputStream
 	;;
 
 	exit) 
-        exit 0
+            # Encrypt file
+            openssl enc -aes-256-cbc -salt -out ~/passwords.enc -pass pass:$masterpass <<< "$inputStream"
+            exit 0
         ;; 
-		
-	*) echo "Other"
-        ;;
 	esac
 done
-
-#fi
