@@ -29,18 +29,14 @@ do
 	done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' <<< "$inputStream")
 
 	echo "Select sitename to copy username:"
-	for ((i=0; i<${#array[@]}; i++)); do
-	    echo "$(($i+1))) ${array[i]}"
-	done
-	read siteselect
+        select siteSelect in "${array[@]}"
+        do
 	
-        # BUG: Only works with display all, if individual search is done, it does not work
-        objectInfo=$(grep -A3 "^id: $(($siteselect-1))" <<< "$inputStream")
-        objectInfoLineNumber=$(awk -v select="id: $(($siteselect-1))" '$0~select{print NR}' <<< "$inputStream")
-        previousSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
-        previousUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
-        previousPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
-
+        objectInfoLineNumber=$(awk -v select="site: $siteSelect" '$0==select{print NR-1}' <<< "$inputStream")
+        singleObjectInfo=$(sed "$objectInfoLineNumber,$(($objectInfoLineNumber+3))!d" <<< "$inputStream")
+        currentSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
         select interactoption in "copy info" "list metadata" "edit" "delete" "exit"
 	do 
 	    case $interactoption in
@@ -48,54 +44,56 @@ do
 	    "copy info")
 	    # Selects the site to copy and copies the username to clipboard 
 	    # (pbcopy only works on mac)
-            pbcopy <<< "$previousUser"
+            pbcopy <<< "$currentUser"
 
 	    echo "Username copied!"
 	    echo "Press enter when you would like to copy the password..."
 	    read
 
 	    # Copies the password to clipboard	
-            pbcopy <<< "$previousPass"
+            pbcopy <<< "$currentPass"
 	    echo "Password copied!"
 	    ;;
 
 	    "list metadata")
-                echo "site: $previousSite"
-                echo "user: $previousUser"
-                echo "pass: $previousPass"
+                echo "site: $currentSite"
+                echo "user: $currentUser"
+                echo "pass: $currentPass"
 	    ;;
 
 	    edit)
-                echo "Site Name ($previousSite):"
+                echo "Site Name ($currentSite):"
 	        read sname
-                echo "Username ($previousUser):"
+                echo "Username ($currentUser):"
 	        read uname
-                echo "Password: ($previousPass)"	
+                echo "Password: ($currentPass)"	
 	        read -s pass
 
+                # Check if null
                 if [[ -n $sname ]]; then
-                    inputStream=$(sed "$(($objectInfoLineNumber+1))s/$previousSite/$sname/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($objectInfoLineNumber+1))s/$currentSite/$sname/g" <<< "$inputStream")
                 fi
                 
                 if [[ -n $uname ]]; then
-                    inputStream=$(sed "$(($objectInfoLineNumber+2))s/$previousUser/$uname/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($objectInfoLineNumber+2))s/$currentUser/$uname/g" <<< "$inputStream")
                 fi
 
                 if [[ -n $pass ]]; then
-                    inputStream=$(sed "$(($objectInfoLineNumber+3))s/$previousPass/$pass/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($objectInfoLineNumber+3))s/$currentPass/$pass/g" <<< "$inputStream")
                 fi
 
                 # Add this to a function
-        objectInfo=$(grep -A3 "^id: $(($siteselect-1))" <<< "$inputStream")
-        previousSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
-        previousUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
-        previousPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$objectInfo")
+                # Update metadata
+        singleObjectInfo=$(sed "$objectInfoLineNumber,$(($objectInfoLineNumber+4))!d" <<< "$inputStream")
+        currentSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
                 echo 
                 echo "Account successfully updated!"
 	    ;;
 
 	    delete)
-                inputStream=$(sed "$(($objectInfoLineNumber)),$(($objectInfoLineNumber+5))" <<< "$inputStream")
+                inputStream=$(sed "$objectInfoLineNumber,$(($objectInfoLineNumber+5))" <<< "$inputStream")
 
                 #Add function here
                 echo 
@@ -109,8 +107,9 @@ do
         done
 
 	array=()
-	;;
-
+        break
+done
+;;
 	add)
 	echo "Site Name:"
 	read sname
