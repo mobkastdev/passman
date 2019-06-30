@@ -1,5 +1,6 @@
 #!/bin/bash
 
+declare -i siteOccurance="0"
 declare -a selectedSiteArray
 declare -a duplicateSiteNameArray
 declare -a objectLineNumber
@@ -35,8 +36,9 @@ trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTERM
 
 # Bypass interactive system
 if [ "$#" -gt 0 ]; then
-    singleObjectLineNumber=$(awk -v select="^site: $1$" '$0~select{print NR}' <<< "$inputStream")
+    singleObjectLineNumber=$(awk -v select="^site: $1$" 'tolower($0)~select{print NR}' <<< "$inputStream")
 
+if [ -n "$singleObjectLineNumber" ]; then
     if [[ $(wc -l <<< "$singleObjectLineNumber") -gt 1 ]]; then
         echo "Error: Multiple sitenames detected, use passman with no arguments to retrieve multiple accounts of the same sitename"
         exit 1
@@ -50,6 +52,10 @@ if [ "$#" -gt 0 ]; then
         echo "Password cleared!"
         exit 0
     fi
+else
+    echo "Site $1 is not found"
+    exit 1
+fi
 fi
 
 select viewOption in "list" "add" "exit"
@@ -69,24 +75,45 @@ do
             else
                 duplicateSiteNameArray+=("$result")
             fi
-	done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' <<< "$inputStream")
+        done < <(awk -v name="site: $sname" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
 
+        while [ " ${#selectedSiteArray[@]} " -eq 0 ]; do
+        echo "No results found. Please try again"
+	echo "Enter the sitename:"
+	read -e sname		
+        while read -er result; do
+            if [[ ! " ${selectedSiteArray[@]} " =~ " ${result} " ]]; then
+	        selectedSiteArray+=("$result") 
+            else
+                duplicateSiteNameArray+=("$result")
+            fi
+        done < <(awk -v name="site: $sname" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
+        done
         echo "Select sitename to copy username:"
         select siteSelect in "${selectedSiteArray[@]}"
         do
 
-        singleObjectLineNumber=$(awk -v select="^site: $siteSelect$" '$0~select{print NR}' <<< "$inputStream")
+            singleObjectLineNumber=$(awk -v select="^site: $siteSelect$" 'tolower($0)~select{print NR}' <<< "$inputStream")
 
         while read -er result; do
             objectLineNumber+=("$result") 
         done < <(echo "$singleObjectLineNumber")
 
-        if [ ${#duplicateSiteNameArray[@]} -gt 0 ]; then
+        if [ ${#duplicateSiteNameArray[@]} -gt 1 ]; then
             echo "Duplicate site detected, select login associated with the site: $siteSelect"
       	    for ((i=0; i<${#objectLineNumber[@]}; i++)); do
                 echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+1))" 'range==NR {print $2}' <<< "$inputStream")"
 	    done
-	    read -e siteOccurance
+	    read -ep '?# ' siteOccurance
+
+            while [ $siteOccurance -le 0 ] || [ $siteOccurance -gt "${#objectLineNumber[@]}" ]; do
+                echo
+                echo "Duplicate site detected, select login associated with the site: $siteSelect"
+      	        for ((i=0; i<${#objectLineNumber[@]}; i++)); do
+                echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+1))" 'range==NR {print $2}' <<< "$inputStream")"
+                done
+	        read -ep '#? ' siteOccurance
+            done
 
             singleObjectLineNumber=$(awk -v occurance="$siteOccurance" 'occurance==NR' <<< "$singleObjectLineNumber")
         fi
