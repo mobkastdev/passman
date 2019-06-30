@@ -19,15 +19,38 @@ read -s masterpass
 # Decrypt file
 inputStream=$(openssl enc -d -aes-256-cbc -in ~/passwords.enc -pass pass:$masterpass 2> /dev/null)
 
+echo
+
 if [ $? -ne 0 ]; then
     echo "Incorrect password!"
     exit 1
 fi
 
+#^D is not captured and so will not display messages
+
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" INT
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGINT
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTSTP
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTERM
+
+# Bypass interactive system
+if [ "$#" -gt 0 ]; then
+    singleObjectLineNumber=$(awk -v select="^site: $1$" '$0~select{print NR}' <<< "$inputStream")
+
+    if [[ $(wc -l <<< "$singleObjectLineNumber") -gt 1 ]]; then
+        echo "Error: Multiple sitenames detected, use passman with no arguments to retrieve multiple accounts of the same sitename"
+        exit 1
+    else
+        singleObjectPass=$(awk -v lineNumber="$(($singleObjectLineNumber+2))" 'lineNumber==NR {$1=""; print substr($0,2)}' <<< "$inputStream")
+        pbcopy <<< "$singleObjectPass"
+        echo "Password copied! (Password is cleared after 20 seconds/when program is exited/when enter is pressed)..."
+        (sleep 20; pbcopy < /dev/null) & 
+        read
+        pbcopy < /dev/null
+        echo "Password cleared!"
+        exit 0
+    fi
+fi
 
 select viewOption in "list" "add" "exit"
 do
@@ -38,7 +61,7 @@ do
 	read -e sname		
 
         # Choose account by the site
-	while read -e -r result; do
+	while read -er result; do
         # Sort duplicate array values
         # TODO: Add a physical mark to notify the user that that site has a duplicate entry
             if [[ ! " ${selectedSiteArray[@]} " =~ " ${result} " ]]; then
@@ -54,14 +77,14 @@ do
 
         singleObjectLineNumber=$(awk -v select="^site: $siteSelect$" '$0~select{print NR}' <<< "$inputStream")
 
-        while read -e -r result; do
+        while read -er result; do
             objectLineNumber+=("$result") 
         done < <(echo "$singleObjectLineNumber")
 
         if [ ${#duplicateSiteNameArray[@]} -gt 0 ]; then
             echo "Duplicate site detected, select login associated with the site: $siteSelect"
       	    for ((i=0; i<${#objectLineNumber[@]}; i++)); do
-                echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+2))" 'range==NR {print $2}' <<< "$inputStream")"
+                echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+1))" 'range==NR {print $2}' <<< "$inputStream")"
 	    done
 	    read -e siteOccurance
 
@@ -87,7 +110,8 @@ do
             pbcopy <<< "$currentPass"
             echo "Password copied! (Password is cleared after 20 seconds/when program is exited/when enter is pressed)..."
             (sleep 20; pbcopy < /dev/null) & 
-            read enter
+            read
+            pbcopy < /dev/null
             echo "Password cleared!"
 	    ;;
 
@@ -186,13 +210,13 @@ tags: $tags"
         inputStream+=$"
 note: $note
 "
-
         echo "Site $sname successfully added!"
 	;;
 
 	exit) 
             # Encrypt file
             openssl enc -aes-256-cbc -salt -out ~/passwords.enc -pass pass:$masterpass <<< "$inputStream"
+            echo "Account information saved!"
             exit 0
         ;; 
 	esac
