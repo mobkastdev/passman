@@ -5,10 +5,12 @@ declare -a duplicateSiteNameArray
 declare -a objectLineNumber
 
 function Refresh_Object_Credentials {
-        singleObjectInfo=$(sed "$singleObjectLineNumber,$(($singleObjectLineNumber+3))!d" <<< "$inputStream")
+        singleObjectInfo=$(sed "$singleObjectLineNumber,$(($singleObjectLineNumber+5))!d" <<< "$inputStream")
         currentSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
         currentUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
         currentPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentTags=$(awk '/^tags: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentNote=$(awk '/^note: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
 }
 
 echo "Password:"
@@ -22,19 +24,16 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Reverse grep search for the first occurance of "id"
-id=$(sed '1!G;h;$!d' <<< "$inputStream" | grep -m 1 "id: " | awk '{print $2}')
-
 select viewOption in "list" "add" "exit"
 do
     case $viewOption in
 	
         list)
 	echo "Enter the sitename:"
-	read sname		
+	read -e sname		
 
         # Choose account by the site
-	while read -r result; do
+	while read -e -r result; do
         # Sort duplicate array values
         # TODO: Add a physical mark to notify the user that that site has a duplicate entry
             if [[ ! " ${selectedSiteArray[@]} " =~ " ${result} " ]]; then
@@ -48,9 +47,9 @@ do
         select siteSelect in "${selectedSiteArray[@]}"
         do
 
-        singleObjectLineNumber=$(awk -v select="^site: $siteSelect$" '$0~select{print NR-1}' <<< "$inputStream")
+        singleObjectLineNumber=$(awk -v select="^site: $siteSelect$" '$0~select{print NR}' <<< "$inputStream")
 
-        while read -r result; do
+        while read -e -r result; do
             objectLineNumber+=("$result") 
         done < <(echo "$singleObjectLineNumber")
 
@@ -59,7 +58,7 @@ do
       	    for ((i=0; i<${#objectLineNumber[@]}; i++)); do
                 echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+2))" 'range==NR {print $2}' <<< "$inputStream")"
 	    done
-	    read siteOccurance
+	    read -e siteOccurance
 
             singleObjectLineNumber=$(awk -v occurance="$siteOccurance" 'occurance==NR' <<< "$singleObjectLineNumber")
         fi
@@ -77,7 +76,7 @@ do
 
 	    echo "Username copied!"
 	    echo "Press enter when you would like to copy the password..."
-	    read
+	    read -e
 
 	    # Copies the password to clipboard	
             pbcopy <<< "$currentPass"
@@ -87,37 +86,53 @@ do
 	    "list metadata")
                 echo "site: $currentSite"
                 echo "user: $currentUser"
-                echo "pass: $currentPass"
+                echo "tags: $currentTags"
+                echo "note: $currentNote"
 	    ;;
 
 	    edit)
                 echo "Site Name ($currentSite):"
-	        read sname
+	        read -e sname
                 echo "Username ($currentUser):"
-	        read uname
-                echo "Password: ($currentPass)"	
+	        read -e uname
+                echo "Password:"	
 	        read -s pass
+                echo "Tags: ($currentTags)"
+                read -e tags
+                echo "Note: ($currentNote)"
+                read -e note
+
+                echo "$singleObjectLineNumber"
 
                 # Check if null
                 if [[ -n $sname ]]; then
-                    inputStream=$(sed "$(($singleObjectLineNumber+1))s/$currentSite/$sname/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($singleObjectLineNumber))s/$currentSite/$sname/g" <<< "$inputStream")
                 fi
                 
                 if [[ -n $uname ]]; then
-                    inputStream=$(sed "$(($singleObjectLineNumber+2))s/$currentUser/$uname/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($singleObjectLineNumber+1))s/$currentUser/$uname/g" <<< "$inputStream")
                 fi
 
                 if [[ -n $pass ]]; then
-                    inputStream=$(sed "$(($singleObjectLineNumber+3))s/$currentPass/$pass/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($singleObjectLineNumber+2))s/$currentPass/$pass/g" <<< "$inputStream")
+                fi
+
+                if [[ -n $tags ]]; then
+                    inputStream=$(sed "$(($singleObjectLineNumber+3))s/$currentTags/$tags/g" <<< "$inputStream")
+                fi
+
+                if [[ -n $note ]]; then
+                    inputStream=$(sed "$(($singleObjectLineNumber+4))s/$currentNote/$note/g" <<< "$inputStream")
                 fi
 
                 Refresh_Object_Credentials
+
                 echo 
                 echo "Account successfully updated!"
 	    ;;
 
 	    delete)
-                inputStream=$(echo "$inputStream" | sed "$singleObjectLineNumber,$((${singleObjectLineNumber}+4))d")
+                inputStream=$(echo "$inputStream" | sed "$singleObjectLineNumber,$((${singleObjectLineNumber}+5))d")
 
                 echo 
                 echo "Account successfully deleted!"
@@ -139,11 +154,15 @@ done
 ;;
 	add)
 	echo "Site Name:"
-	read sname
+	read -e sname
 	echo "Username:"
-	read uname
+	read -e uname
 	echo "Password:"	
 	read -s pass
+        echo "Tags:"
+        read -e tags
+        echo "Note:"
+        read -e note
         
         # Need to fix ugly spaces
 	inputStream+=$"
@@ -153,6 +172,11 @@ site: $sname"
 user: $uname"
 	inputStream+=$"
 pass: $pass"
+        inputStream+=$"
+tags: $tags"
+        inputStream+=$"
+note: $note
+"
 
         echo "Site $sname successfully added!"
 	;;
