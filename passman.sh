@@ -24,6 +24,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" INT
+trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGINT
+trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTSTP
+trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTERM
+
 select viewOption in "list" "add" "exit"
 do
     case $viewOption in
@@ -80,14 +85,19 @@ do
 
 	    # Copies the password to clipboard	
             pbcopy <<< "$currentPass"
-	    echo "Password copied!"
+            echo "Password copied! (Password is cleared after 20 seconds/when program is exited/when enter is pressed)..."
+            (sleep 20; pbcopy < /dev/null) & 
+            read enter
+            echo "Password cleared!"
 	    ;;
 
 	    "list metadata")
                 echo "site: $currentSite"
                 echo "user: $currentUser"
-                echo "tags: $currentTags"
-                echo "note: $currentNote"
+                echo "tags: $(sed -e 's/^/#&/' -e 's/;/ #/g' <<< $currentTags)"
+                # Newlines do not work in Mac OSX https://stackoverflow.com/questions/723157/how-to-insert-a-newline-in-front-of-a-pattern
+                echo "note: $(sed 's/;/\
+      /' <<< $currentNote)"
 	    ;;
 
 	    edit)
@@ -97,9 +107,9 @@ do
 	        read -e uname
                 echo "Password:"	
 	        read -s pass
-                echo "Tags: ($currentTags)"
+                echo "Tags: [Separate fields by semicolons] ($currentTags)"
                 read -e tags
-                echo "Note: ($currentNote)"
+                echo "Note: [Separate fields by semicolons] ($currentNote)"
                 read -e note
 
                 echo "$singleObjectLineNumber"
@@ -164,7 +174,6 @@ done
         echo "Note:"
         read -e note
         
-        # Need to fix ugly spaces
 	inputStream+=$"
 
 site: $sname"
