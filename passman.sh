@@ -1,5 +1,16 @@
 #!/bin/bash
 
+declare -a selectedSiteArray
+declare -a duplicateSiteNameArray
+declare -a objectLineNumber
+
+function Refresh_Object_Credentials {
+        singleObjectInfo=$(sed "$singleObjectLineNumber,$(($singleObjectLineNumber+3))!d" <<< "$inputStream")
+        currentSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+        currentPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+}
+
 echo "Password:"
 read -s masterpass
 
@@ -11,35 +22,56 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-declare -a array
 # Reverse grep search for the first occurance of "id"
 id=$(sed '1!G;h;$!d' <<< "$inputStream" | grep -m 1 "id: " | awk '{print $2}')
 
-select viewoption in "list" "add" "exit"
+select viewOption in "list" "add" "exit"
 do
-    case $viewoption in
+    case $viewOption in
 	
         list)
 	echo "Enter the sitename:"
 	read sname		
 
+        # Choose account by the site
 	while read -r results; do
-	    array+=("$results") 
-	# make variable and check regex here
+	    selectedSiteArray+=("$results") 
 	done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' <<< "$inputStream")
 
 	echo "Select sitename to copy username:"
-        select siteSelect in "${array[@]}"
+        select siteSelect in "${selectedSiteArray[@]}"
         do
-	
-        objectInfoLineNumber=$(awk -v select="site: $siteSelect" '$0==select{print NR-1}' <<< "$inputStream")
-        singleObjectInfo=$(sed "$objectInfoLineNumber,$(($objectInfoLineNumber+3))!d" <<< "$inputStream")
-        currentSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
-        currentUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
-        currentPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
-        select interactoption in "copy info" "list metadata" "edit" "delete" "exit"
+
+        singleObjectLineNumber=$(awk -v select="site: $siteSelect" '$0~select{print NR-1}' <<< "$inputStream")
+
+        while read -r results; do
+            objectLineNumber+=("$results") 
+        done < <(echo "$singleObjectLineNumber")
+
+#echo "${singleObjectLineNumber[@]}"
+#echo "${objectLineNumber[@]}"
+
+        # Filter duplicate site values
+	while read -r site; do
+	    duplicateSiteNameArray+=("$site") 
+	done < <(printf '%s\n' "${selectedSiteArray[@]}" | awk -v siteName="^$siteSelect$" '$0~siteName')
+
+        if [ ${#duplicateSiteNameArray[@]} -gt 1 ]; then
+            echo "Duplicate site detected, select login associated with the site: $siteSelect"
+      	    for ((i=0; i<${#duplicateSiteNameArray[@]}; i++)); do
+                echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+2))" 'range==NR {print $2}' <<< "$inputStream")"
+	    done
+	    read siteOccurance
+
+            singleObjectLineNumber=$(awk -v occurance="$siteOccurance" 'occurance==NR' <<< "$singleObjectLineNumber")
+        fi
+        
+
+        Refresh_Object_Credentials
+
+        select interactOption in "copy info" "list metadata" "edit" "delete" "exit"
 	do 
-	    case $interactoption in
+	    case $interactOption in
 
 	    "copy info")
 	    # Selects the site to copy and copies the username to clipboard 
@@ -71,33 +103,29 @@ do
 
                 # Check if null
                 if [[ -n $sname ]]; then
-                    inputStream=$(sed "$(($objectInfoLineNumber+1))s/$currentSite/$sname/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($singleObjectLineNumber+1))s/$currentSite/$sname/g" <<< "$inputStream")
                 fi
                 
                 if [[ -n $uname ]]; then
-                    inputStream=$(sed "$(($objectInfoLineNumber+2))s/$currentUser/$uname/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($singleObjectLineNumber+2))s/$currentUser/$uname/g" <<< "$inputStream")
                 fi
 
                 if [[ -n $pass ]]; then
-                    inputStream=$(sed "$(($objectInfoLineNumber+3))s/$currentPass/$pass/g" <<< "$inputStream")
+                    inputStream=$(sed "$(($singleObjectLineNumber+3))s/$currentPass/$pass/g" <<< "$inputStream")
                 fi
 
-                # Add this to a function
-                # Update metadata
-        singleObjectInfo=$(sed "$objectInfoLineNumber,$(($objectInfoLineNumber+4))!d" <<< "$inputStream")
-        currentSite=$(awk '/^site: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
-        currentUser=$(awk '/^user: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
-        currentPass=$(awk '/^pass: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
+                Refresh_Object_Credentials
                 echo 
                 echo "Account successfully updated!"
 	    ;;
 
 	    delete)
-                inputStream=$(sed "$objectInfoLineNumber,$(($objectInfoLineNumber+5))" <<< "$inputStream")
+                inputStream=$(echo "$inputStream" | sed "$singleObjectLineNumber,$((${singleObjectLineNumber}+4))d")
 
-                #Add function here
                 echo 
                 echo "Account successfully deleted!"
+                echo "$inputStream"
+                break
 	    ;;
 					
 	    exit)
@@ -106,7 +134,8 @@ do
 	    esac
         done
 
-	array=()
+	selectedSiteArray=()
+        duplicateSiteNameArray=()
         break
 done
 ;;
@@ -117,11 +146,17 @@ done
 	read uname
 	echo "Password:"	
 	read -s pass
-	echo "id: $(($id + 1))" >> $inputStream 
-	echo "site: $sname" >> $inputStream
-	echo "user: $uname" >> $inputStream
-	echo "pass: $pass" >> $inputStream
-	echo " " >> $inputStream
+        
+        # Need to fix ugly spaces
+	inputStream+=$"
+
+site: $sname"
+	inputStream+=$"
+user: $uname"
+	inputStream+=$"
+pass: $pass"
+
+        echo "Site $sname successfully added!"
 	;;
 
 	exit) 
