@@ -34,38 +34,35 @@ do
 	read sname		
 
         # Choose account by the site
-	while read -r results; do
-	    selectedSiteArray+=("$results") 
+	while read -r result; do
+        # Sort duplicate array values
+        # TODO: Add a physical mark to notify the user that that site has a duplicate entry
+            if [[ ! " ${selectedSiteArray[@]} " =~ " ${result} " ]]; then
+	        selectedSiteArray+=("$result") 
+            else
+                duplicateSiteNameArray+=("$result")
+            fi
 	done < <(awk -v name="site: $sname" '$0~name{$1=""; print substr($0,2)}' <<< "$inputStream")
 
-	echo "Select sitename to copy username:"
+        echo "Select sitename to copy username:"
         select siteSelect in "${selectedSiteArray[@]}"
         do
 
-        singleObjectLineNumber=$(awk -v select="site: $siteSelect" '$0~select{print NR-1}' <<< "$inputStream")
+        singleObjectLineNumber=$(awk -v select="^site: $siteSelect$" '$0~select{print NR-1}' <<< "$inputStream")
 
-        while read -r results; do
-            objectLineNumber+=("$results") 
+        while read -r result; do
+            objectLineNumber+=("$result") 
         done < <(echo "$singleObjectLineNumber")
 
-#echo "${singleObjectLineNumber[@]}"
-#echo "${objectLineNumber[@]}"
-
-        # Filter duplicate site values
-	while read -r site; do
-	    duplicateSiteNameArray+=("$site") 
-	done < <(printf '%s\n' "${selectedSiteArray[@]}" | awk -v siteName="^$siteSelect$" '$0~siteName')
-
-        if [ ${#duplicateSiteNameArray[@]} -gt 1 ]; then
+        if [ ${#duplicateSiteNameArray[@]} -gt 0 ]; then
             echo "Duplicate site detected, select login associated with the site: $siteSelect"
-      	    for ((i=0; i<${#duplicateSiteNameArray[@]}; i++)); do
+      	    for ((i=0; i<${#objectLineNumber[@]}; i++)); do
                 echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+2))" 'range==NR {print $2}' <<< "$inputStream")"
 	    done
 	    read siteOccurance
 
             singleObjectLineNumber=$(awk -v occurance="$siteOccurance" 'occurance==NR' <<< "$singleObjectLineNumber")
         fi
-        
 
         Refresh_Object_Credentials
 
@@ -136,6 +133,7 @@ do
 
 	selectedSiteArray=()
         duplicateSiteNameArray=()
+        objectLineNumber=()
         break
 done
 ;;
