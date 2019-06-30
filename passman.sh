@@ -1,6 +1,7 @@
 #!/bin/bash
 
 declare -i siteOccurance="0"
+declare -i siteChoice="0"
 declare -a selectedSiteArray
 declare -a duplicateSiteNameArray
 declare -a objectLineNumber
@@ -90,8 +91,41 @@ do
         done < <(awk -v name="site: $sname" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
         done
         echo "Select sitename to copy username:"
-        select siteSelect in "${selectedSiteArray[@]}"
-        do
+        ((dupSiteCount=0))
+      	        for ((i=0; i<${#selectedSiteArray[@]}; i++)); do
+                    for dupSite in "${duplicateSiteNameArray[@]}"; do
+                    if [ "${selectedSiteArray[$i]}" = "$dupSite" ]; then
+                        ((dupSiteCount++)) 
+                    fi
+                    if [ "$dupSiteCount" -gt 0 ]; then
+                        echo "$(($i+1))) "${selectedSiteArray[$i]}" ($(($dupSiteCount+1)))"
+                    else
+                        echo "$(($i+1))) "${selectedSiteArray[$i]}""
+                    fi
+                done
+                ((dupSiteCount=0))
+            done
+                read -ep '#? ' siteChoice
+
+            while [ $siteChoice -le 0 ] || [ $siteChoice -gt "${#selectedSiteArray[@]}" ]; do
+                echo "Error: Pick a valid number from the list:"
+      	        for ((i=0; i<${#selectedSiteArray[@]}; i++)); do
+                    for dupSite in "${duplicateSiteNameArray[@]}"; do
+                    if [ "${selectedSiteArray[$i]}" = "$dupSite" ]; then
+                        ((dupSiteCount++)) 
+                    fi
+                    if [ "$dupSiteCount" -gt 0 ]; then
+                        echo "$(($i+1))) "${selectedSiteArray[$i]}" ($(($dupSiteCount+1)))"
+                    else
+                        echo "$(($i+1))) "${selectedSiteArray[$i]}""
+                    fi
+                done
+                ((dupSiteCount=0))
+            done
+            read -ep '#? ' siteChoice
+            done
+        
+            siteSelect=${selectedSiteArray[$(($siteChoice-1))]}
 
             singleObjectLineNumber=$(awk -v select="^site: $siteSelect$" 'tolower($0)~select{print NR}' <<< "$inputStream")
 
@@ -99,7 +133,7 @@ do
             objectLineNumber+=("$result") 
         done < <(echo "$singleObjectLineNumber")
 
-        if [ ${#duplicateSiteNameArray[@]} -gt 1 ]; then
+        if [ ${#duplicateSiteNameArray[@]} -gt 0 ]; then
             echo "Duplicate site detected, select login associated with the site: $siteSelect"
       	    for ((i=0; i<${#objectLineNumber[@]}; i++)); do
                 echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+1))" 'range==NR {print $2}' <<< "$inputStream")"
@@ -210,8 +244,6 @@ do
 	selectedSiteArray=()
         duplicateSiteNameArray=()
         objectLineNumber=()
-        break
-done
 ;;
 	add)
 	echo "Site Name:"
