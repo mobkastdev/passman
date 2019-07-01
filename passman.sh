@@ -70,7 +70,6 @@ do
         # Choose account by the site
 	while read -er result; do
         # Sort duplicate array values
-        # TODO: Add a physical mark to notify the user that that site has a duplicate entry
             if [[ ! " ${selectedSiteArray[@]} " =~ " ${result} " ]]; then
 	        selectedSiteArray+=("$result") 
             else
@@ -90,6 +89,7 @@ do
             fi
         done < <(awk -v name="site: $sname" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
         done
+        echo "${selectedSiteArray[@]}"
         echo "Select sitename to copy username:"
         ((dupSiteCount=0))
       	        for ((i=0; i<${#selectedSiteArray[@]}; i++)); do
@@ -97,12 +97,12 @@ do
                     if [ "${selectedSiteArray[$i]}" = "$dupSite" ]; then
                         ((dupSiteCount++)) 
                     fi
+                done
                     if [ "$dupSiteCount" -gt 0 ]; then
                         echo "$(($i+1))) "${selectedSiteArray[$i]}" ($(($dupSiteCount+1)))"
                     else
                         echo "$(($i+1))) "${selectedSiteArray[$i]}""
                     fi
-                done
                 ((dupSiteCount=0))
             done
                 read -ep '#? ' siteChoice
@@ -114,12 +114,12 @@ do
                     if [ "${selectedSiteArray[$i]}" = "$dupSite" ]; then
                         ((dupSiteCount++)) 
                     fi
+                done
                     if [ "$dupSiteCount" -gt 0 ]; then
                         echo "$(($i+1))) "${selectedSiteArray[$i]}" ($(($dupSiteCount+1)))"
                     else
                         echo "$(($i+1))) "${selectedSiteArray[$i]}""
                     fi
-                done
                 ((dupSiteCount=0))
             done
             read -ep '#? ' siteChoice
@@ -133,7 +133,7 @@ do
             objectLineNumber+=("$result") 
         done < <(echo "$singleObjectLineNumber")
 
-        if [ ${#duplicateSiteNameArray[@]} -gt 0 ]; then
+        if [ ${#objectLineNumber[@]} -gt 1 ]; then
             echo "Duplicate site detected, select login associated with the site: $siteSelect"
       	    for ((i=0; i<${#objectLineNumber[@]}; i++)); do
                 echo "$(($i+1))) $(awk -v range="$((${objectLineNumber[$i]}+1))" 'range==NR {print $2}' <<< "$inputStream")"
@@ -179,7 +179,7 @@ do
 	    "list metadata")
                 echo "site: $currentSite"
                 echo "user: $currentUser"
-                echo "tags: $(sed -e 's/^/#&/' -e 's/;/ #/g' <<< $currentTags)"
+                echo "tags: $(sed -e 's/^/#&/' -e 's/ / #/g' <<< $currentTags)"
                 # Newlines do not work in Mac OSX https://stackoverflow.com/questions/723157/how-to-insert-a-newline-in-front-of-a-pattern
                 echo "note: $(sed 's/;/\
       /' <<< $currentNote)"
@@ -196,8 +196,6 @@ do
                 read -e tags
                 echo "Note: [Separate fields by semicolons] ($currentNote)"
                 read -e note
-
-                echo "$singleObjectLineNumber"
 
                 # Check if null
                 if [[ -n $sname ]]; then
@@ -231,7 +229,6 @@ do
 
                 echo 
                 echo "Account successfully deleted!"
-                echo "$inputStream"
                 break
 	    ;;
 					
@@ -252,14 +249,14 @@ do
 	read -e uname
 	echo "Password:"	
 	read -s pass
-        echo "Tags:"
+        echo "Tags [Separate fields with spaces]:"
         read -e tags
-        echo "Note:"
+        echo "Note [Separate fields with semicolons]:"
         read -e note
         
 	inputStream+=$"
 
-site: $sname"
+        site: $(echo $sname | tr '[:upper:]' '[:lower:]')"
 	inputStream+=$"
 user: $uname"
 	inputStream+=$"
