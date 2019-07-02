@@ -4,15 +4,21 @@ This only works for Mac OSX.
 
 ## Commands:
 
-`passman`
+```
+passman
+```
 
 Will include an interactive password management interface which allows for creation, deletion, updating, and removing passwords. This CLI includes clipboard usage.
 
-`passman -f file_name.txt`
+```
+passman -f file_name.txt
+```
 
 This command will import the specified file into the password manager, the layout of the file is specified in the Bulk Entry section.
 
-`passman site_i_want_to_search`
+```
+passman site_i_want_to_search
+```
 
 This command allows for a quick retrieval of the password for a specific site. I
 
