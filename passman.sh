@@ -23,10 +23,10 @@ trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTSTP
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTERM
 
 # Decrypt file
-if [ -f ~/passwords.enc ]; then
+if [ -f ~/.passwords.enc ]; then
     echo "Password:"
     read -s masterpass
-    inputStream=$(openssl enc -d -aes-256-cbc -in ~/passwords.enc -pass pass:$masterpass 2> /dev/null)
+    inputStream=$(openssl enc -d -aes-256-cbc -in ~/.passwords.enc -pass pass:$masterpass 2> /dev/null)
 
     if [ $? -ne 0 ]; then
         echo "Incorrect password!"
@@ -46,14 +46,14 @@ else
         read -sp 'Confirm your master password: ' masterpasscomp
     done
 
-            openssl enc -aes-256-cbc -salt -out ~/passwords.enc -pass pass:$masterpass < /dev/null
+            openssl enc -aes-256-cbc -salt -out ~/.passwords.enc -pass pass:$masterpass < /dev/null
 
     case "$1" in
     -f)
         filename="$2"
         if [ -f "$filename" ]; then
-            openssl enc -aes-256-cbc -salt -in $filename -out ~/passwords.enc -pass pass:$masterpass
-    inputStream=$(openssl enc -d -aes-256-cbc -in ~/passwords.enc -pass pass:$masterpass 2> /dev/null)
+            openssl enc -aes-256-cbc -salt -in $filename -out ~/.passwords.enc -pass pass:$masterpass
+    inputStream=$(openssl enc -d -aes-256-cbc -in ~/.passwords.enc -pass pass:$masterpass 2> /dev/null)
         else 
             echo "File path: $filename does not exist"
         fi
@@ -76,7 +76,7 @@ while [ -n "$1" ]; do # while loop starts
     -f)
         filename="$2"
         if [ -f "$filename" ]; then
-            openssl enc -aes-256-cbc -salt -in $filename -out ~/passwords.enc -pass pass:$masterpass 
+            openssl enc -aes-256-cbc -salt -in $filename -out ~/.passwords.enc -pass pass:$masterpass 
         else 
             echo "File path: $filename does not exist"
         fi
@@ -334,7 +334,8 @@ note: $note
 
 	exit) 
             # Encrypt file
-            openssl enc -aes-256-cbc -salt -out ~/passwords.enc -pass pass:$masterpass <<< "$inputStream"
+            openssl enc -aes-256-cbc -salt -out ~/.passwords.enc -pass pass:$masterpass <<< "$inputStream"
+            chmod 600 ~/.passwords.enc
             echo "Account information saved!"
             exit 0
         ;; 
