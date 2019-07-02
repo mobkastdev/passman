@@ -2,6 +2,7 @@
 
 declare -i siteOccurance="0"
 declare -i siteChoice="0"
+inputStream=""
 declare -a selectedSiteArray
 declare -a duplicateSiteNameArray
 declare -a objectLineNumber
@@ -15,28 +16,75 @@ function Refresh_Object_Credentials {
         currentNote=$(awk '/^note: / {$1=""; print substr($0,2)}' <<< "$singleObjectInfo")
 }
 
-echo "Password:"
-read -s masterpass
-
-# Decrypt file
-inputStream=$(openssl enc -d -aes-256-cbc -in ~/passwords.enc -pass pass:$masterpass 2> /dev/null)
-
-echo
-
-if [ $? -ne 0 ]; then
-    echo "Incorrect password!"
-    exit 1
-fi
-
 #^D is not captured and so will not display messages
-
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" INT
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGINT
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTSTP
 trap "pbcopy < /dev/null; echo -e \ No changes saved!; exit 0" SIGTERM
 
+# Decrypt file
+if [ -f ~/passwords.enc ]; then
+    echo "Password:"
+    read -s masterpass
+    inputStream=$(openssl enc -d -aes-256-cbc -in ~/passwords.enc -pass pass:$masterpass 2> /dev/null)
+
+    if [ $? -ne 0 ]; then
+        echo "Incorrect password!"
+        exit 1
+    fi
+else
+    echo "Password file does not exist and will be created"
+    read -sp 'Set your master password: ' masterpass
+    echo
+    read -sp 'Confirm your master password: ' masterpasscomp
+
+    while [ "$masterpass" != "$masterpasscomp" ]; do
+        echo
+        echo "Passwords are not matching!"
+        read -sp 'Set your master password: ' masterpass
+        echo
+        read -sp 'Confirm your master password: ' masterpasscomp
+    done
+
+            openssl enc -aes-256-cbc -salt -out ~/passwords.enc -pass pass:$masterpass < /dev/null
+
+    case "$1" in
+    -f)
+        filename="$2"
+        if [ -f "$filename" ]; then
+            openssl enc -aes-256-cbc -salt -in $filename -out ~/passwords.enc -pass pass:$masterpass
+    inputStream=$(openssl enc -d -aes-256-cbc -in ~/passwords.enc -pass pass:$masterpass 2> /dev/null)
+        else 
+            echo "File path: $filename does not exist"
+        fi
+        ;;
+
+    *)
+        ;;
+esac
+fi
+
+echo
+
+
+
 # Bypass interactive system
-if [ "$#" -gt 0 ]; then
+while [ -n "$1" ]; do # while loop starts
+ 
+    case "$1" in
+    -f)
+        filename="$2"
+        if [ -f "$filename" ]; then
+            openssl enc -aes-256-cbc -salt -in $filename -out ~/passwords.enc -pass pass:$masterpass 
+        else 
+            echo "File path: $filename does not exist"
+        fi
+ 
+        shift
+        exit 0
+        ;;
+            
+    *)
     singleObjectLineNumber=$(awk -v select="^site: $1$" 'tolower($0)~select{print NR}' <<< "$inputStream")
 
 if [ -n "$singleObjectLineNumber" ]; then
@@ -57,7 +105,10 @@ else
     echo "Site $1 is not found"
     exit 1
 fi
-fi
+        ;;
+    esac
+    shift
+done
 
 select viewOption in "list" "add" "exit"
 do
@@ -77,19 +128,9 @@ do
             fi
         done < <(awk -v name="site: $sname" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
 
-        while [ " ${#selectedSiteArray[@]} " -eq 0 ]; do
-        echo "No results found. Please try again"
-	echo "Enter the sitename:"
-	read -e sname		
-        while read -er result; do
-            if [[ ! " ${selectedSiteArray[@]} " =~ " ${result} " ]]; then
-	        selectedSiteArray+=("$result") 
-            else
-                duplicateSiteNameArray+=("$result")
-            fi
-        done < <(awk -v name="site: $sname" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
-        done
-        echo "${selectedSiteArray[@]}"
+        if [ " ${#selectedSiteArray[@]} " -eq 0 ]; then
+        echo "No results found. Please add a site or search again"
+else
         echo "Select sitename to copy username:"
         ((dupSiteCount=0))
       	        for ((i=0; i<${#selectedSiteArray[@]}; i++)); do
@@ -192,7 +233,7 @@ do
 	        read -e uname
                 echo "Password:"	
 	        read -s pass
-                echo "Tags: [Separate fields by semicolons] ($currentTags)"
+                echo "Tags: [Separate fields by spaces] ($currentTags)"
                 read -e tags
                 echo "Note: [Separate fields by semicolons] ($currentNote)"
                 read -e note
@@ -241,6 +282,7 @@ do
 	selectedSiteArray=()
         duplicateSiteNameArray=()
         objectLineNumber=()
+    fi
 ;;
 	add)
 	echo "Site Name:"
@@ -255,8 +297,7 @@ do
         read -e note
         
 	inputStream+=$"
-
-        site: $(echo $sname | tr '[:upper:]' '[:lower:]')"
+site: $(echo $sname | tr '[:upper:]' '[:lower:]')"
 	inputStream+=$"
 user: $uname"
 	inputStream+=$"
