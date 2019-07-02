@@ -57,6 +57,7 @@ else
         else 
             echo "File path: $filename does not exist"
         fi
+        echo "File has been successfully added!"
         ;;
 
     *)
@@ -79,9 +80,8 @@ while [ -n "$1" ]; do # while loop starts
         else 
             echo "File path: $filename does not exist"
         fi
- 
+        echo "File has been successfully added!"
         shift
-        exit 0
         ;;
             
     *)
@@ -110,7 +110,7 @@ fi
     shift
 done
 
-select viewOption in "list" "add" "exit"
+select viewOption in "list" "add" "change password" "exit"
 do
     case $viewOption in
 	
@@ -309,6 +309,28 @@ note: $note
 "
         echo "Site $sname successfully added!"
 	;;
+
+    "change password")
+        read -sp 'Enter your master password: ' checkpass
+        echo
+        if [ "$checkpass" = "$masterpass" ]; then
+            read -sp 'Set your master password: ' masterpass
+            echo
+            read -sp 'Confirm your master password: ' masterpasscomp
+
+            while [ "$masterpass" != "$masterpasscomp" ]; do
+                echo
+                echo "Passwords are not matching!"
+                read -sp 'Set your master password: ' masterpass
+                echo
+                read -sp 'Confirm your master password: ' masterpasscomp
+            done
+            echo
+            echo "Your password has been changed!"
+        else
+            echo "Password does not equal current password!"
+        fi
+        ;;
 
 	exit) 
             # Encrypt file
