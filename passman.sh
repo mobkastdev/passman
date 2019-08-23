@@ -126,7 +126,7 @@ do
             else
                 duplicateSiteNameArray+=("$result")
             fi
-        done < <(awk -v name="site: $sname" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
+        done < <(awk -v name="^site: [a-z0-9]*$sname[a-z0-9]*" 'tolower($0)~name{$1=""; print substr($0,2)}' <<< "$inputStream")
 
         if [ " ${#selectedSiteArray[@]} " -eq 0 ]; then
         echo "No results found. Please add a site or search again"
